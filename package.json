@@ -23,6 +23,7 @@
     "packages/*"
   ],
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "prisma": "^7.5.0"
   },
   "module": "index.ts",
