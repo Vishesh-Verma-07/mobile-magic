@@ -47,6 +47,6 @@ app.post("/projects", authMiddleware, async (req, res) => {
   res.json(projects);
 });
 
-app.listen(8080, () => {
+app.listen(9090, () => {
   console.log("Server is running on port 8080");
 });
