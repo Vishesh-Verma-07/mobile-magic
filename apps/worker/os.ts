@@ -15,16 +15,20 @@ function getSafeTargetPath(filePath: string) {
 mkdirSync(BASE_WORKER_DIR, { recursive: true });
 
 export async function onFileUpdate(filePath: string, fileContent: string) {
+    console.log(`Received file update for ${filePath}`);
   const absoluteFilePath = getSafeTargetPath(filePath);
   mkdirSync(path.dirname(absoluteFilePath), { recursive: true });
   await writeFile(absoluteFilePath, fileContent);
 }
 
 export function onShellCommand(shellCommand: string) {
+  console.log("Received shell command:", shellCommand);
   const commands = shellCommand.split("&&");
+ 
 
   for (const command of commands) {
     const trimmedCommand = command.trim();
+
     if (!trimmedCommand) {
       continue;
     }

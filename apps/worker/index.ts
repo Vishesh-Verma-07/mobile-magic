@@ -53,26 +53,85 @@ app.post("/prompt", async (req, res) => {
   console.log("Stream result:", streamResult);
 
   let fullText = "";
+  const executedActions = new Set<string>();
+
+  const executeFileAction = async (filePath: string, fileContent: string) => {
+    const actionKey = `file:${filePath}:${fileContent}`;
+    if (executedActions.has(actionKey)) {
+      return;
+    }
+
+    executedActions.add(actionKey);
+    console.log(
+      `Processing file action for ${filePath} with content length ${fileContent.length}`,
+    );
+
+    try {
+      await onFileUpdate(filePath, fileContent);
+    } catch (error) {
+      console.error(`Failed to write file ${filePath}:`, error);
+    }
+
+    res.write(
+      `data: ${JSON.stringify({ type: "file", filePath, fileContent })}\n\n`,
+    );
+  };
+
+  const executeShellAction = async (shellCommand: string) => {
+    const normalizedCommand = shellCommand.trim();
+    if (!normalizedCommand) {
+      return;
+    }
+
+    const actionKey = `shell:${normalizedCommand}`;
+    if (executedActions.has(actionKey)) {
+      return;
+    }
+
+    executedActions.add(actionKey);
+    console.log(`Executing shell command from LLM: ${normalizedCommand}`);
+    runShellCommand(normalizedCommand);
+
+    res.write(
+      `data: ${JSON.stringify({ type: "shell", shellCommand: normalizedCommand })}\n\n`,
+    );
+  };
+
+  const parseAndExecuteActionsFromText = async (text: string) => {
+    const actionRegex = /<boltAction\b([^>]*)>([\s\S]*?)<\/boltAction>/gi;
+
+    let match: RegExpExecArray | null;
+    while ((match = actionRegex.exec(text)) !== null) {
+      const rawAttributes = match[1] ?? "";
+      const rawContent = match[2] ?? "";
+      const typeMatch = rawAttributes.match(
+        /type\s*=\s*["']?([a-zA-Z]+)["']?/i,
+      );
+      const actionType = typeMatch?.[1]?.toLowerCase();
+
+      if (actionType === "file") {
+        const filePathMatch = rawAttributes.match(
+          /filePath\s*=\s*["']([^"']+)["']/i,
+        );
+        const filePath = filePathMatch?.[1];
+        if (filePath) {
+          await executeFileAction(filePath, rawContent);
+        }
+      } else if (actionType === "shell") {
+        await executeShellAction(rawContent);
+      }
+    }
+  };
 
   const processor = new ArtifactProcessor(
     "",
     // onFileContent — fires each time a complete file is parsed
     async (filePath, fileContent) => {
-      try {
-        await onFileUpdate(filePath, fileContent);
-      } catch (error) {
-        console.error(`Failed to write file ${filePath}:`, error);
-      }
-
-      res.write(
-        `data: ${JSON.stringify({ type: "file", filePath, fileContent })}\n\n`,
-      );
+      await executeFileAction(filePath, fileContent);
     },
     // onShellCommand — fires each time a complete shell action is parsed
     async (shellCommand) => {
-      runShellCommand(shellCommand);
-
-      res.write(`data: ${JSON.stringify({ type: "shell", shellCommand })}\n\n`);
+      await executeShellAction(shellCommand);
     },
   );
 
@@ -98,6 +157,10 @@ app.post("/prompt", async (req, res) => {
   await prismaClient.prompt.create({
     data: { content: fullText, projectId, type: "SYSTEM" },
   });
+
+  // Fallback pass: process all actions from full model output to recover any
+  // action that might have been missed during incremental chunk parsing.
+  await parseAndExecuteActionsFromText(fullText);
 
   await onFileUpdate(`${projectId}/llm-response.txt`, fullText);
 
