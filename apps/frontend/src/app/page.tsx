@@ -5,8 +5,8 @@ import { AppHeader } from "@/components/layout/app-header";
 import { RecentProjectsSidebar } from "@/components/layout/recent-projects-sidebar";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
+import { FormEvent, useEffect, useState } from "react";
 
 type Project = {
   id: string;
@@ -57,20 +57,15 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [isProjectsLoading, setIsProjectsLoading] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [projectsError, setProjectsError] = useState<string | undefined>(
     undefined,
   );
   const { getToken } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
-
-  const selectedProjectId = searchParams.get("projectId") ?? undefined;
 
   const handleProjectSelect = (projectId: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("projectId", projectId);
-    router.push(`${pathname}?${params.toString()}`);
+    router.push(`/project/${projectId}`);
   };
 
   const fetchProjects = async () => {
@@ -89,6 +84,8 @@ export default function Home() {
         {},
         { headers: { Authorization: `Bearer ${token}` } },
       );
+
+      console.log("Fetched projects:", response.data);
       const sortedProjects = [...response.data].sort(
         (a, b) =>
           new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
@@ -103,17 +100,7 @@ export default function Home() {
 
   useEffect(() => {
     fetchProjects();
-    // This should run once on mount for initial sidebar data.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const selectedProjectTitle = useMemo(() => {
-    if (!selectedProjectId) {
-      return undefined;
-    }
-    return projects.find((project) => project.id === selectedProjectId)
-      ?.description;
-  }, [projects, selectedProjectId]);
 
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -151,18 +138,51 @@ export default function Home() {
 
   return (
     <main className="flex min-h-screen flex-col bg-white text-slate-900">
-      <AppHeader />
+      <AppHeader
+        action={
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(true)}
+            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700 transition hover:bg-slate-100"
+          >
+            <span className="flex flex-col gap-1">
+              <span className="h-0.5 w-4 rounded bg-current" />
+              <span className="h-0.5 w-4 rounded bg-current" />
+              <span className="h-0.5 w-4 rounded bg-current" />
+            </span>
+            Recent Projects
+          </button>
+        }
+      />
+
+      {isSidebarOpen && (
+        <button
+          type="button"
+          aria-label="Close recent projects"
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-40 bg-slate-900/35"
+        />
+      )}
+
+      <aside
+        className={`fixed inset-y-0 left-0 top-0 z-50 w-full max-w-[320px] transform overflow-y-auto border-r border-slate-200 bg-slate-50 p-4 shadow-xl transition-transform duration-200 ${
+          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
+        }`}
+      >
+        <RecentProjectsSidebar
+          projects={projects}
+          isLoading={isProjectsLoading}
+          errorMessage={projectsError}
+          onSelectProject={(projectId) => {
+            setIsSidebarOpen(false);
+            handleProjectSelect(projectId);
+          }}
+          collapsible={false}
+        />
+      </aside>
 
       <section className="flex flex-1 px-4 py-8 sm:px-6 sm:py-10">
-        <div className="mx-auto flex w-full max-w-6xl flex-col gap-6 lg:flex-row lg:items-start">
-          <RecentProjectsSidebar
-            projects={projects}
-            selectedProjectId={selectedProjectId}
-            isLoading={isProjectsLoading}
-            errorMessage={projectsError}
-            onSelectProject={handleProjectSelect}
-          />
-
+        <div className="mx-auto w-full max-w-6xl">
           <div className="w-full">
             <div className="mx-auto max-w-3xl text-center">
               <p className="mb-3 inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-600">
@@ -175,14 +195,6 @@ export default function Home() {
                 Describe your app idea, and we will generate a
                 ready-to-customize website layout in seconds.
               </p>
-              {selectedProjectId && (
-                <p className="mt-3 text-xs text-slate-500">
-                  Viewing project:{" "}
-                  <span className="font-medium text-slate-700">
-                    {selectedProjectTitle?.trim() || selectedProjectId}
-                  </span>
-                </p>
-              )}
             </div>
 
             <form

@@ -14,6 +14,7 @@ type RecentProjectsSidebarProps = {
   isLoading: boolean;
   errorMessage?: string;
   onSelectProject: (projectId: string) => void;
+  collapsible?: boolean;
 };
 
 export function RecentProjectsSidebar({
@@ -22,6 +23,7 @@ export function RecentProjectsSidebar({
   isLoading,
   errorMessage,
   onSelectProject,
+  collapsible = true,
 }: RecentProjectsSidebarProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -29,20 +31,22 @@ export function RecentProjectsSidebar({
     <aside className="w-full rounded-2xl border border-slate-200 bg-white p-4 lg:sticky lg:top-6 lg:max-w-xs lg:self-start">
       <div className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
-          <button
-            type="button"
-            aria-label="Toggle recent projects"
-            aria-expanded={isOpen}
-            onClick={() => setIsOpen((current) => !current)}
-            className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-300/40 lg:hidden"
-          >
-            <span className="sr-only">Toggle sidebar</span>
-            <span className="flex flex-col gap-1">
-              <span className="h-0.5 w-4 rounded bg-current" />
-              <span className="h-0.5 w-4 rounded bg-current" />
-              <span className="h-0.5 w-4 rounded bg-current" />
-            </span>
-          </button>
+          {collapsible && (
+            <button
+              type="button"
+              aria-label="Toggle recent projects"
+              aria-expanded={isOpen}
+              onClick={() => setIsOpen((current) => !current)}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-300 text-slate-700 transition hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-300/40 lg:hidden"
+            >
+              <span className="sr-only">Toggle sidebar</span>
+              <span className="flex flex-col gap-1">
+                <span className="h-0.5 w-4 rounded bg-current" />
+                <span className="h-0.5 w-4 rounded bg-current" />
+                <span className="h-0.5 w-4 rounded bg-current" />
+              </span>
+            </button>
+          )}
           <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-slate-600">
             Recent Projects
           </h2>
@@ -52,7 +56,11 @@ export function RecentProjectsSidebar({
         )}
       </div>
 
-      <div className={`${isOpen ? "block" : "hidden"} lg:block`}>
+      <div
+        className={
+          collapsible ? `${isOpen ? "block" : "hidden"} lg:block` : "block"
+        }
+      >
         {errorMessage && (
           <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-2.5 py-2 text-xs text-red-700">
             {errorMessage}

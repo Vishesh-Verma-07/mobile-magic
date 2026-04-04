@@ -1,9 +1,10 @@
+import { GoogleGenerativeAI } from "@google/generative-ai";
 import cors from "cors";
 import { prismaClient } from "db/client";
 import express from "express";
+import { onFileUpdate, onShellCommand as runShellCommand } from "./os";
 import { ArtifactProcessor } from "./parser";
 import { systemPrompt } from "./systemPrompt";
-import { GoogleGenerativeAI } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -37,8 +38,8 @@ app.post("/prompt", async (req, res) => {
   }));
 
   const model = genAI.getGenerativeModel({
-    model: "gemini-2.0-flash",
-    systemInstruction: systemPrompt("NEXTJS"),
+    model: "gemini-2.5-flash",
+    systemInstruction: systemPrompt("REACT_NATIVE"),
   });
 
   // SSE headers
@@ -48,24 +49,36 @@ app.post("/prompt", async (req, res) => {
 
   const chat = model.startChat({ history });
   const streamResult = await chat.sendMessageStream(prompt);
+  console.log("LLM response stream started");
+  console.log("Stream result:", streamResult);
 
   let fullText = "";
 
   const processor = new ArtifactProcessor(
     "",
     // onFileContent — fires each time a complete file is parsed
-    (filePath, fileContent) => {
+    async (filePath, fileContent) => {
+      try {
+        await onFileUpdate(filePath, fileContent);
+      } catch (error) {
+        console.error(`Failed to write file ${filePath}:`, error);
+      }
+
       res.write(
-        `data: ${JSON.stringify({ type: "file", filePath, fileContent })}\n\n`
+        `data: ${JSON.stringify({ type: "file", filePath, fileContent })}\n\n`,
       );
     },
     // onShellCommand — fires each time a complete shell action is parsed
-    (shellCommand) => {
-      res.write(
-        `data: ${JSON.stringify({ type: "shell", shellCommand })}\n\n`
-      );
-    }
+    async (shellCommand) => {
+      runShellCommand(shellCommand);
+
+      res.write(`data: ${JSON.stringify({ type: "shell", shellCommand })}\n\n`);
+    },
   );
+
+  console.log(processor);
+  console.log("Processing LLM response stream...");
+  console.log("Stream result stream:", streamResult.stream);
 
   for await (const chunk of streamResult.stream) {
     const chunkText = chunk.text();
@@ -73,16 +86,20 @@ app.post("/prompt", async (req, res) => {
 
     // Feed chunk into processor and attempt to parse completed actions
     processor.append(chunkText);
-    processor.parse();
+    await processor.parse();
 
     // Also stream raw chunk to client so UI can show live typing effect
-    res.write(`data: ${JSON.stringify({ type: "chunk", chunk: chunkText })}\n\n`);
+    res.write(
+      `data: ${JSON.stringify({ type: "chunk", chunk: chunkText })}\n\n`,
+    );
   }
 
   // Save full LLM response to DB
   await prismaClient.prompt.create({
     data: { content: fullText, projectId, type: "SYSTEM" },
   });
+
+  await onFileUpdate(`${projectId}/llm-response.txt`, fullText);
 
   res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
   res.end();

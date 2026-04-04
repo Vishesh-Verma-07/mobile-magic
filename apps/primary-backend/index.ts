@@ -36,6 +36,7 @@ app.post("/project", authMiddleware, async (req, res) => {
 app.post("/projects", authMiddleware, async (req, res) => {
   const userId = req.userId;
 
+  console.log("Received request for projects with userId:", userId);
   if (!userId) {
     res.status(400).json({ message: "authenticated user is required" });
     return;
@@ -48,5 +49,5 @@ app.post("/projects", authMiddleware, async (req, res) => {
 });
 
 app.listen(9090, () => {
-  console.log("Server is running on port 8080");
+  console.log("Server is running on port 9090");
 });
