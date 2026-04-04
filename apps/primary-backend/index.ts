@@ -48,6 +48,46 @@ app.post("/projects", authMiddleware, async (req, res) => {
   res.json(projects);
 });
 
+app.get("/projects/:projectId/prompts", authMiddleware, async (req, res) => {
+  const projectIdParam = req.params.projectId;
+  const projectId = Array.isArray(projectIdParam)
+    ? projectIdParam[0]
+    : projectIdParam;
+  const userId = req.userId;
+
+  if (!projectId || !userId) {
+    res
+      .status(400)
+      .json({ message: "projectId and authenticated user are required" });
+    return;
+  }
+
+  const project = await prismaClient.project.findFirst({
+    where: { id: projectId, userId },
+    select: { id: true },
+  });
+
+  if (!project) {
+    res.status(404).json({ message: "Project not found" });
+    return;
+  }
+
+  let prompts;
+  try {
+    prompts = await prismaClient.prompt.findMany({
+      where: { projectId },
+      orderBy: { createdAt: "asc" },
+    });
+    console.log(`Fetched ${prompts.length} prompts for projectId ${projectId}`);
+  } catch (error) {
+    console.error("Error fetching prompts:", error);
+    res.status(500).json({ message: "Error fetching prompts" });
+    return;
+  }
+
+  res.json({ prompts });
+});
+
 app.listen(9090, () => {
   console.log("Server is running on port 9090");
 });

@@ -2,6 +2,7 @@
 
 import { AppHeader } from "@/components/layout/app-header";
 import { RecentProjectsSidebar } from "@/components/layout/recent-projects-sidebar";
+import { usePrompts } from "@/hooks/usePromp.ts";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import Link from "next/link";
@@ -31,6 +32,7 @@ export default function ProjectWorkspacePage() {
     const value = params?.projectId;
     return Array.isArray(value) ? value[0] : value;
   }, [params]);
+  const prompts = usePrompts(projectId);
 
   const fetchProjects = useCallback(async () => {
     const token = await getToken();
@@ -74,30 +76,33 @@ export default function ProjectWorkspacePage() {
   const handleChatSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    
-    const token = await getToken();
     const trimmedPrompt = prompt.trim();
     if (!trimmedPrompt) {
       return;
     }
 
+    if (!projectId) {
+      window.alert("Project ID is missing.");
+      return;
+    }
+
+    const token = await getToken();
+
     if (!token) {
       console.log("No auth token found. Please sign in and try again.");
-      window.alert("Please sign in to create a project.");
+      window.alert("Please sign in to send prompts.");
       return;
     }
 
     try {
-      const response = await axios.post(
-        `${process.env.NEXT_PUBLIC_BACKEND_URL}/project`,
-        { prompt: trimmedPrompt },
-        { headers: { Authorization: `Bearer ${token}` } },
+      await axios.post(
+        `${process.env.NEXT_PUBLIC_WORKER_URL ?? "http://localhost:9091"}/prompt`,
+        { prompt: trimmedPrompt, projectId },
       );
-
-     
+      setPrompt("");
     } catch (error) {
-      window.alert(error);
-      console.log("Error creating project:", error);
+      window.alert("Failed to send prompt.");
+      console.log("Error sending prompt:", error);
     }
   };
 
@@ -173,16 +178,33 @@ export default function ProjectWorkspacePage() {
                 </p>
               </div>
 
-              <div className="flex-1 space-y-3 overflow-y-auto p-4 sm:p-5">
-                <div className="max-w-[85%] rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-700">
-                  Ask me for changes and I will update your app in real time.
-                </div>
-                <div className="ml-auto max-w-[85%] rounded-2xl bg-slate-900 px-3 py-2 text-sm text-white">
-                  Build me a responsive hero section with a strong CTA.
-                </div>
-                <div className="max-w-[85%] rounded-2xl bg-slate-100 px-3 py-2 text-sm text-slate-700">
-                  Great choice. I will scaffold the section and wire mobile
-                  spacing.
+              <div className="min-h-0 flex-1 max-h-150 overflow-y-auto bg-slate-50/70 p-3 sm:p-4">
+                <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+                  {prompts.length === 0 && (
+                    <div className="rounded-2xl border border-dashed border-slate-300 bg-white/90 px-4 py-5 text-center text-sm text-slate-500">
+                      Start with a prompt and your conversation will appear
+                      here.
+                    </div>
+                  )}
+
+                  {prompts.map((prompt) => (
+                    <div
+                      key={prompt.id}
+                      className={`flex ${
+                        prompt.type === "USER" ? "justify-end" : "justify-start"
+                      }`}
+                    >
+                      <div
+                        className={`w-fit max-w-80 rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-break-word shadow-sm ${
+                          prompt.type === "USER"
+                            ? "bg-slate-900 text-white"
+                            : "border border-slate-200 bg-white text-slate-800"
+                        }`}
+                      >
+                        {prompt.content}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               </div>
 
@@ -193,13 +215,14 @@ export default function ProjectWorkspacePage() {
                 <label htmlFor="chat-input" className="sr-only">
                   Send a message
                 </label>
-                <div className="flex gap-2">
+                <div className="flex items-center gap-2">
                   <input
                     id="chat-input"
                     type="text"
+                    value={prompt}
                     onChange={(event) => setPrompt(event.target.value)}
                     placeholder="Type a prompt for this project..."
-                    className="h-11 w-full rounded-xl border border-slate-300 px-3 text-sm outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-300/40"
+                    className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-300/40"
                   />
                   <button
                     type="submit"
