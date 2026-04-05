@@ -6,6 +6,7 @@ type Action = {
   id: string;
   content: string;
   type: "FILE" | "SHELL";
+  createdAt: string;
 };
 
 export function useActions(projectId?: string) {

@@ -104,6 +104,7 @@ app.get("/projects/:projectId/actions", authMiddleware, async (req, res) => {
 
   const actions = await prismaClient.action.findMany({
     where: { projectId: projectId },
+    orderBy: { createdAt: "asc" },
   });
 
   console.log(actions);

@@ -15,6 +15,22 @@ type Project = {
   createdAt: string;
 };
 
+type TimelineItem =
+  | {
+      id: string;
+      createdAt: string;
+      kind: "prompt";
+      promptType: "USER" | "SYSTEM";
+      content: string;
+    }
+  | {
+      id: string;
+      createdAt: string;
+      kind: "action";
+      actionType: "FILE" | "SHELL";
+      content: string;
+    };
+
 export default function ProjectWorkspacePage() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [isProjectsLoading, setIsProjectsLoading] = useState(false);
@@ -106,6 +122,29 @@ export default function ProjectWorkspacePage() {
     [projects, projectId],
   );
 
+  const timelineItems = useMemo<TimelineItem[]>(() => {
+    const promptItems: TimelineItem[] = prompts.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt,
+      kind: "prompt",
+      promptType: item.type,
+      content: item.content,
+    }));
+
+    const actionItems: TimelineItem[] = actions.map((item) => ({
+      id: item.id,
+      createdAt: item.createdAt,
+      kind: "action",
+      actionType: item.type,
+      content: item.content,
+    }));
+
+    return [...promptItems, ...actionItems].sort(
+      (a, b) =>
+        new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    );
+  }, [actions, prompts]);
+
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-white text-slate-900">
       <AppHeader
@@ -151,51 +190,64 @@ export default function ProjectWorkspacePage() {
 
                   <div className="flex-1 overflow-y-auto bg-slate-50/50 p-3 scroll-smooth">
                     <div className="mx-auto flex w-full max-w-md flex-col gap-2.5">
-                      {prompts.length === 0 && (
+                      {timelineItems.length === 0 && (
                         <div className="rounded-2xl border border-dashed border-slate-300 bg-white/90 px-4 py-5 text-center text-sm text-slate-500">
                           Start with a prompt and your conversation will appear
                           here.
                         </div>
                       )}
 
-                      {prompts?.map((prompt) => (
-                        <div key={prompt.id} className={`flex justify-end`}>
-                          <div
-                            className={`w-fit max-w-80 rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-break-word shadow-sm  bg-slate-900 text-white `}
-                          >
-                            {prompt.type === "USER" ? prompt.content : null}
-                          </div>
-                        </div>
-                      ))}
+                      {timelineItems.map((item) => {
+                        if (item.kind === "prompt") {
+                          const isUser = item.promptType === "USER";
+                          return (
+                            <div
+                              key={`prompt-${item.id}`}
+                              className={`flex ${isUser ? "justify-end" : "justify-start"}`}
+                            >
+                              <div
+                                className={`w-fit max-w-80 rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-break-word shadow-sm ${
+                                  isUser
+                                    ? "bg-slate-900 text-white"
+                                    : "bg-white text-slate-900 border border-slate-200"
+                                }`}
+                              >
+                                {item.content}
+                              </div>
+                            </div>
+                          );
+                        }
 
-                      {actions?.map((action) => (
-                        <div key={action.id} className={`flex justify-start`}>
+                        return (
                           <div
-                            className={`w-fit max-w-80 rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-break-word shadow-sm  bg-slate-200 text-slate-900 `}
+                            key={`action-${item.id}`}
+                            className="flex justify-start"
                           >
-                            {action.type === "FILE" ? (
-                              <div className="flex flex-col gap-1.5">
-                                <span className="font-semibold text-slate-700">
-                                  File updated:
-                                </span>
-                                <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap break-all rounded bg-slate-100 p-2 text-[11px] leading-normal font-mono">
-                                  {action.content}
-                                </pre>
-                              </div>
-                            ) : null}
-                            {action.type === "SHELL" ? (
-                              <div className="flex flex-col gap-1">
-                                <span className="font-semibold text-slate-700">
-                                  Command:
-                                </span>
-                                <code className="break-all rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono">
-                                  {action.content}
-                                </code>
-                              </div>
-                            ) : null}
+                            <div className="w-fit max-w-80 rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-break-word shadow-sm bg-slate-200 text-slate-900">
+                              {item.actionType === "FILE" ? (
+                                <div className="flex flex-col gap-1.5">
+                                  <span className="font-semibold text-slate-700">
+                                    File updated:
+                                  </span>
+                                  <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap break-all rounded bg-slate-100 p-2 text-[11px] leading-normal font-mono">
+                                    {item.content}
+                                  </pre>
+                                </div>
+                              ) : null}
+                              {item.actionType === "SHELL" ? (
+                                <div className="flex flex-col gap-1">
+                                  <span className="font-semibold text-slate-700">
+                                    Command:
+                                  </span>
+                                  <code className="break-all rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono">
+                                    {item.content}
+                                  </code>
+                                </div>
+                              ) : null}
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                     </div>
                   </div>
 

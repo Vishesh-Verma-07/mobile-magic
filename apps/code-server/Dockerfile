@@ -13,5 +13,11 @@ USER coder
 # Expose code-server's default port
 EXPOSE 8080
 
+RUN mkdir -p /tmp/bolty-worker
+
+RUN git clone https://github.com/Vishesh-Verma-07/base-react-native-expo.git /tmp/bolty-worker
+RUN cd /tmp/bolty-worker && npm install
+
+
 # Start code-server on container launch
 CMD ["code-server", "--auth", "none", "--bind-addr", "0.0.0.0:8080", "/tmp/bolty-worker"]
