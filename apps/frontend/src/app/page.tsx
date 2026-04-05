@@ -2,7 +2,7 @@
 
 import { AppFooter } from "@/components/layout/app-footer";
 import { AppHeader } from "@/components/layout/app-header";
-import { RecentProjectsSidebar } from "@/components/layout/recent-projects-sidebar";
+import { Sidebar } from "@/components/layout/sidebar";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
 import { useRouter } from "next/navigation";
@@ -57,7 +57,7 @@ export default function Home() {
   const [prompt, setPrompt] = useState("");
   const [projects, setProjects] = useState<Project[]>([]);
   const [isProjectsLoading, setIsProjectsLoading] = useState(false);
-  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [projectsError, setProjectsError] = useState<string | undefined>(
     undefined,
   );
@@ -137,123 +137,105 @@ export default function Home() {
   };
 
   return (
-    <main className="flex min-h-screen flex-col bg-white text-slate-900">
+    <div className="flex h-screen flex-col overflow-hidden bg-white text-slate-900">
       <AppHeader
-        action={
-          <button
-            type="button"
-            onClick={() => setIsSidebarOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 py-2 text-xs font-semibold uppercase tracking-[0.08em] text-slate-700 transition hover:bg-slate-100"
-          >
-            <span className="flex flex-col gap-1">
-              <span className="h-0.5 w-4 rounded bg-current" />
-              <span className="h-0.5 w-4 rounded bg-current" />
-              <span className="h-0.5 w-4 rounded bg-current" />
-            </span>
-            Recent Projects
-          </button>
-        }
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen(!isSidebarOpen)}
       />
 
-      {isSidebarOpen && (
-        <button
-          type="button"
-          aria-label="Close recent projects"
-          onClick={() => setIsSidebarOpen(false)}
-          className="fixed inset-0 z-40 bg-slate-900/35"
-        />
-      )}
-
-      <aside
-        className={`fixed inset-y-0 left-0 top-0 z-50 w-full max-w-[320px] transform overflow-y-auto border-r border-slate-200 bg-slate-50 p-4 shadow-xl transition-transform duration-200 ${
-          isSidebarOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
-      >
-        <RecentProjectsSidebar
+      <div className="flex flex-1 flex-row overflow-hidden">
+        <Sidebar
+          isOpen={isSidebarOpen}
           projects={projects}
           isLoading={isProjectsLoading}
-          errorMessage={projectsError}
-          onSelectProject={(projectId) => {
-            setIsSidebarOpen(false);
-            handleProjectSelect(projectId);
-          }}
-          collapsible={false}
+          onSelectProject={handleProjectSelect}
+          className="fixed inset-y-0 left-0 top-13 z-20 flex w-64 lg:static lg:top-0"
         />
-      </aside>
 
-      <section className="flex flex-1 px-4 py-8 sm:px-6 sm:py-10">
-        <div className="mx-auto w-full max-w-6xl">
-          <div className="w-full">
-            <div className="mx-auto max-w-3xl text-center">
-              <p className="mb-3 inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-600">
-                Build any app with a prompt
-              </p>
-              <h1 className="text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
-                What do you want to build today?
-              </h1>
-              <p className="mt-4 text-sm text-slate-600 sm:text-base">
-                Describe your app idea, and we will generate a
-                ready-to-customize website layout in seconds.
-              </p>
-            </div>
+        {isSidebarOpen && (
+          <button
+            type="button"
+            onClick={() => setIsSidebarOpen(false)}
+            className="fixed inset-0 z-10 bg-slate-900/10 backdrop-blur-[1px] transition-opacity lg:hidden"
+            aria-label="Close sidebar"
+          />
+        )}
 
-            <form
-              onSubmit={handleSubmit}
-              className="mx-auto mt-9 flex w-full max-w-3xl flex-col gap-3 sm:flex-row"
-            >
-              <input
-                value={prompt}
-                onChange={(event) => setPrompt(event.target.value)}
-                placeholder="Example: Create a SaaS dashboard with analytics, team management, and billing pages"
-                className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-300/35"
-                aria-label="Describe the app you want to build"
-              />
-              <button
-                type="submit"
-                className="h-14 rounded-2xl bg-slate-900 px-7 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-400/40"
-              >
-                Build App
-              </button>
-            </form>
+        <main className="flex flex-1 flex-col overflow-y-auto">
+          <section className="flex flex-1 px-4 py-8 sm:px-6 sm:py-10">
+            <div className="mx-auto w-full max-w-6xl">
+              <div className="w-full">
+                <div className="mx-auto max-w-3xl text-center">
+                  <p className="mb-3 inline-flex rounded-full border border-slate-300 bg-white px-3 py-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-600">
+                    Build any app with a prompt
+                  </p>
+                  <h1 className="text-balance text-4xl font-semibold leading-tight tracking-tight sm:text-5xl">
+                    What do you want to build today?
+                  </h1>
+                  <p className="mt-4 text-sm text-slate-600 sm:text-base">
+                    Describe your app idea, and we will generate a
+                    ready-to-customize website layout in seconds.
+                  </p>
+                </div>
 
-            <div className="mx-auto mt-12 max-w-4xl">
-              <div className="mb-5 flex items-center justify-between gap-3">
-                <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-600">
-                  Start from a default app
-                </h2>
-                <span className="text-xs text-slate-500">
-                  Tap one to autofill the prompt
-                </span>
-              </div>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {starterApps.map((app) => (
+                <form
+                  onSubmit={handleSubmit}
+                  className="mx-auto mt-9 flex w-full max-w-3xl flex-col gap-3 sm:flex-row"
+                >
+                  <input
+                    value={prompt}
+                    onChange={(event) => setPrompt(event.target.value)}
+                    placeholder="Example: Create a SaaS dashboard with analytics, team management, and billing pages"
+                    className="h-14 w-full rounded-2xl border border-slate-300 bg-white px-5 text-sm text-slate-900 shadow-sm outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-300/35"
+                    aria-label="Describe the app you want to build"
+                  />
                   <button
-                    key={app.name}
-                    type="button"
-                    onClick={() => setPrompt(app.prompt)}
-                    className="group rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-sm"
+                    type="submit"
+                    className="h-14 rounded-2xl bg-slate-900 px-7 text-sm font-semibold text-white transition hover:bg-slate-700 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-400/40"
                   >
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
-                      {app.category}
-                    </p>
-                    <p className="mt-1 text-sm font-semibold text-slate-900">
-                      {app.name}
-                    </p>
-                    <p className="mt-1.5 line-clamp-2 text-xs text-slate-600">
-                      {app.prompt}
-                    </p>
-                    <p className="mt-2 text-[11px] font-medium text-slate-700 opacity-0 transition group-hover:opacity-100">
-                      Use this prompt
-                    </p>
+                    Build App
                   </button>
-                ))}
+                </form>
+
+                <div className="mx-auto mt-12 max-w-4xl">
+                  <div className="mb-5 flex items-center justify-between gap-3">
+                    <h2 className="text-sm font-semibold uppercase tracking-[0.14em] text-slate-600">
+                      Start from a default app
+                    </h2>
+                    <span className="text-xs text-slate-500">
+                      Tap one to autofill the prompt
+                    </span>
+                  </div>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                    {starterApps.map((app) => (
+                      <button
+                        key={app.name}
+                        type="button"
+                        onClick={() => setPrompt(app.prompt)}
+                        className="group rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-left transition hover:-translate-y-0.5 hover:border-slate-400 hover:shadow-sm"
+                      >
+                        <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                          {app.category}
+                        </p>
+                        <p className="mt-1 text-sm font-semibold text-slate-900">
+                          {app.name}
+                        </p>
+                        <p className="mt-1.5 line-clamp-2 text-xs text-slate-600">
+                          {app.prompt}
+                        </p>
+                        <p className="mt-2 text-[11px] font-medium text-slate-700 opacity-0 transition group-hover:opacity-100">
+                          Use this prompt
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-        </div>
-      </section>
-
-      <AppFooter />
-    </main>
+          </section>
+          <AppFooter />
+        </main>
+      </div>
+    </div>
   );
 }
