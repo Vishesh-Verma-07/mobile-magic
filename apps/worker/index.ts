@@ -2,6 +2,7 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 import cors from "cors";
 import { prismaClient } from "db/client";
 import express from "express";
+import { spawnSync } from "node:child_process";
 import { onFileUpdate, onShellCommand as runShellCommand } from "./os";
 import { ArtifactProcessor } from "./parser";
 import { systemPrompt } from "./systemPrompt";
@@ -12,10 +13,42 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
+const CODE_SERVER_CONTAINER =
+  process.env.CODE_SERVER_CONTAINER ?? "code-server";
+const CODE_SERVER_LOG_LINES = Number(
+  process.env.CODE_SERVER_LOG_LINES ?? "200",
+);
+const CODE_SERVER_LOG_MAX_CHARS = Number(
+  process.env.CODE_SERVER_LOG_MAX_CHARS ?? "16000",
+);
+
+function getCodeServerTerminalContext() {
+  const result = spawnSync(
+    "docker",
+    ["logs", "--tail", String(CODE_SERVER_LOG_LINES), CODE_SERVER_CONTAINER],
+    {
+      encoding: "utf8",
+      timeout: 5000,
+    },
+  );
+
+  const rawLog = `${result.stdout ?? ""}\n${result.stderr ?? ""}`.trim();
+  if (!rawLog) {
+    return "";
+  }
+
+  if (rawLog.length <= CODE_SERVER_LOG_MAX_CHARS) {
+    return rawLog;
+  }
+
+  return rawLog.slice(-CODE_SERVER_LOG_MAX_CHARS);
+}
+
 app.get("/", (req, res) => {
   res.json({ message: "Hello from the worker!" });
 });
 app.post("/prompt", async (req, res) => {
+  // console.log("reached prompt endpoint with body:", req.body);
   const { prompt, projectId } = req.body;
 
   if (!prompt || !projectId) {
@@ -23,7 +56,7 @@ app.post("/prompt", async (req, res) => {
     return;
   }
 
-  await prismaClient.prompt.create({
+  const userPrompt = await prismaClient.prompt.create({
     data: { content: prompt, projectId, type: "USER" },
   });
 
@@ -37,6 +70,11 @@ app.post("/prompt", async (req, res) => {
     parts: [{ text: p.content }],
   }));
 
+  const terminalContext = getCodeServerTerminalContext();
+  const promptWithTerminalContext = terminalContext
+    ? `${prompt}\n\n[RECENT TERMINAL OUTPUT FROM CODE-SERVER DOCKER CONTAINER]\n${terminalContext}`
+    : prompt;
+
   const model = genAI.getGenerativeModel({
     model: "gemini-2.5-flash",
     systemInstruction: systemPrompt("REACT_NATIVE"),
@@ -48,9 +86,7 @@ app.post("/prompt", async (req, res) => {
   res.setHeader("Connection", "keep-alive");
 
   const chat = model.startChat({ history });
-  const streamResult = await chat.sendMessageStream(prompt);
-  console.log("LLM response stream started");
-  console.log("Stream result:", streamResult);
+  const streamResult = await chat.sendMessageStream(promptWithTerminalContext);
 
   let fullText = "";
   const executedActions = new Set<string>();
@@ -62,12 +98,9 @@ app.post("/prompt", async (req, res) => {
     }
 
     executedActions.add(actionKey);
-    console.log(
-      `Processing file action for ${filePath} with content length ${fileContent.length}`,
-    );
 
     try {
-      await onFileUpdate(filePath, fileContent);
+      await onFileUpdate(filePath, fileContent, projectId, userPrompt.id);
     } catch (error) {
       console.error(`Failed to write file ${filePath}:`, error);
     }
@@ -89,8 +122,8 @@ app.post("/prompt", async (req, res) => {
     }
 
     executedActions.add(actionKey);
-    console.log(`Executing shell command from LLM: ${normalizedCommand}`);
-    runShellCommand(normalizedCommand);
+
+    runShellCommand(normalizedCommand, projectId, userPrompt.id);
 
     res.write(
       `data: ${JSON.stringify({ type: "shell", shellCommand: normalizedCommand })}\n\n`,
@@ -135,10 +168,6 @@ app.post("/prompt", async (req, res) => {
     },
   );
 
-  console.log(processor);
-  console.log("Processing LLM response stream...");
-  console.log("Stream result stream:", streamResult.stream);
-
   for await (const chunk of streamResult.stream) {
     const chunkText = chunk.text();
     fullText += chunkText;
@@ -154,7 +183,7 @@ app.post("/prompt", async (req, res) => {
   }
 
   // Save full LLM response to DB
-  await prismaClient.prompt.create({
+  const llmPrompt = await prismaClient.prompt.create({
     data: { content: fullText, projectId, type: "SYSTEM" },
   });
 
@@ -162,7 +191,12 @@ app.post("/prompt", async (req, res) => {
   // action that might have been missed during incremental chunk parsing.
   await parseAndExecuteActionsFromText(fullText);
 
-  await onFileUpdate(`${projectId}/llm-response.txt`, fullText);
+  await onFileUpdate(
+    `${projectId}/llm-response.txt`,
+    fullText,
+    projectId,
+    llmPrompt.id,
+  );
 
   res.write(`data: ${JSON.stringify({ type: "done" })}\n\n`);
   res.end();

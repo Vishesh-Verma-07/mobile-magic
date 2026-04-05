@@ -1,3 +1,4 @@
+import { prismaClient } from "db/client";
 import { spawnSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { writeFile } from "node:fs/promises";
@@ -14,17 +15,48 @@ function getSafeTargetPath(filePath: string) {
 
 mkdirSync(BASE_WORKER_DIR, { recursive: true });
 
-export async function onFileUpdate(filePath: string, fileContent: string) {
-    console.log(`Received file update for ${filePath}`);
+export async function onFileUpdate(
+  filePath: string,
+  fileContent: string,
+  projectId: string,
+  promptId: string,
+) {
+  console.log(`Received file update for ${filePath}`);
   const absoluteFilePath = getSafeTargetPath(filePath);
   mkdirSync(path.dirname(absoluteFilePath), { recursive: true });
   await writeFile(absoluteFilePath, fileContent);
+
+  const action = await prismaClient.action.create({
+    data: {
+      content: `Received file update for ${filePath}`,
+      projectId: projectId,
+      promptId: promptId,
+      type: "FILE",
+    },
+  });
+
+  console.log(
+    `File written to ${absoluteFilePath} and action logged with id ${action.id}`,
+  );
 }
 
-export function onShellCommand(shellCommand: string) {
+export async function onShellCommand(
+  shellCommand: string,
+  projectId: string,
+  promptId: string,
+) {
   console.log("Received shell command:", shellCommand);
+  const action = await prismaClient.action.create({
+    data: {
+      content: `Received shell command: ${shellCommand}`,
+      projectId: projectId,
+      promptId: promptId,
+      type: "SHELL",
+    },
+  });
+
   const commands = shellCommand.split("&&");
- 
+  const commandLogs: string[] = [];
 
   for (const command of commands) {
     const trimmedCommand = command.trim();
@@ -34,11 +66,24 @@ export function onShellCommand(shellCommand: string) {
     }
 
     console.log(`Running command: ${trimmedCommand}`);
+
     const result = spawnSync(trimmedCommand, {
       cwd: BASE_WORKER_DIR,
       shell: true,
       encoding: "utf8",
     });
+
+    const exitCode = result.status ?? 1;
+    const commandLog = [
+      `$ ${trimmedCommand}`,
+      result.stdout?.trim() ? `stdout:\n${result.stdout.trim()}` : "",
+      result.stderr?.trim() ? `stderr:\n${result.stderr.trim()}` : "",
+      `exit_code: ${exitCode}`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    commandLogs.push(commandLog);
 
     if (result.stdout) {
       console.log(result.stdout);
@@ -48,4 +93,17 @@ export function onShellCommand(shellCommand: string) {
       console.log(result.stderr);
     }
   }
+
+  const aggregatedLog = [
+    `Received shell command: ${shellCommand}`,
+    "--- terminal output ---",
+    commandLogs.join("\n\n"),
+  ].join("\n");
+
+  await prismaClient.action.update({
+    where: { id: action.id },
+    data: {
+      content: aggregatedLog,
+    },
+  });
 }

@@ -88,6 +88,29 @@ app.get("/projects/:projectId/prompts", authMiddleware, async (req, res) => {
   res.json({ prompts });
 });
 
+app.get("/projects/:projectId/actions", authMiddleware, async (req, res) => {
+  const projectIdParam = req.params.projectId;
+  const projectId = Array.isArray(projectIdParam)
+    ? projectIdParam[0]
+    : projectIdParam;
+  const userId = req.userId;
+
+  if (!projectId || !userId) {
+    res
+      .status(400)
+      .json({ message: "projectId and authenticated user are required" });
+    return;
+  }
+
+  const actions = await prismaClient.action.findMany({
+    where: { projectId: projectId },
+  });
+
+  console.log(actions);
+
+  res.json(actions);
+});
+
 app.listen(9090, () => {
   console.log("Server is running on port 9090");
 });

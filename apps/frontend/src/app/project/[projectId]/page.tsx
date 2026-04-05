@@ -2,6 +2,7 @@
 
 import { AppHeader } from "@/components/layout/app-header";
 import { Sidebar } from "@/components/layout/sidebar";
+import { useActions } from "@/hooks/useActions";
 import { usePrompts } from "@/hooks/usePromp.ts";
 import { useAuth } from "@clerk/nextjs";
 import axios from "axios";
@@ -32,6 +33,7 @@ export default function ProjectWorkspacePage() {
     return Array.isArray(value) ? value[0] : value;
   }, [params]);
   const prompts = usePrompts(projectId);
+  const actions = useActions(projectId);
 
   const fetchProjects = useCallback(async () => {
     const token = await getToken();
@@ -66,6 +68,7 @@ export default function ProjectWorkspacePage() {
   }, [fetchProjects]);
 
   const handleChatSubmit = async (event: FormEvent<HTMLFormElement>) => {
+    console.log("Submitting prompt:", prompt);
     event.preventDefault();
 
     const trimmedPrompt = prompt.trim();
@@ -87,10 +90,10 @@ export default function ProjectWorkspacePage() {
     }
 
     try {
-      await axios.post(
-        `${process.env.NEXT_PUBLIC_WORKER_URL ?? "http://localhost:9091"}/prompt`,
-        { prompt: trimmedPrompt, projectId },
-      );
+      await axios.post(`${process.env.NEXT_PUBLIC_WORKER_URL}/prompt`, {
+        prompt: trimmedPrompt,
+        projectId,
+      });
       setPrompt("");
     } catch (error) {
       window.alert("Failed to send prompt.");
@@ -131,26 +134,23 @@ export default function ProjectWorkspacePage() {
           />
         )}
 
-        <main className="flex flex-1 flex-col overflow-y-auto bg-slate-50">
-          <section className="flex flex-1 px-3 py-3 sm:px-4 sm:py-4 lg:px-6 lg:py-5">
-            <div className="mx-auto flex w-full max-w-400 flex-1 flex-col gap-4">
-              <div className="grid w-full flex-1 gap-4 xl:min-h-0 xl:grid-cols-[380px_minmax(0,1fr)]">
-                <section className="flex min-h-90 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:min-h-0">
-                  <div className="border-b border-slate-200 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+        <main className="flex flex-1 flex-col overflow-hidden bg-slate-50">
+          <section className="flex flex-1 p-3 overflow-hidden">
+            <div className="mx-auto flex h-full w-full max-w-400 flex-col gap-3">
+              <div className="grid h-full w-full flex-1 gap-3 overflow-hidden xl:grid-cols-[350px_1fr]">
+                <section className="flex flex-col min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <div className="shrink-0 border-b border-slate-200 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                       Chat Workspace
                     </p>
-                    <h1 className="mt-1 text-lg font-semibold text-slate-900">
+                    <h1 className="mt-0.5 text-base font-semibold text-slate-900 truncate">
                       {selectedProject?.description?.trim() ||
                         "Untitled project"}
                     </h1>
-                    <p className="mt-1 text-xs text-slate-500">
-                      Project ID: {projectId}
-                    </p>
                   </div>
 
-                  <div className="min-h-0 flex-1 max-h-150 overflow-y-auto bg-slate-50/70 p-3 sm:p-4">
-                    <div className="mx-auto flex w-full max-w-md flex-col gap-3">
+                  <div className="flex-1 overflow-y-auto bg-slate-50/50 p-3 scroll-smooth">
+                    <div className="mx-auto flex w-full max-w-md flex-col gap-2.5">
                       {prompts.length === 0 && (
                         <div className="rounded-2xl border border-dashed border-slate-300 bg-white/90 px-4 py-5 text-center text-sm text-slate-500">
                           Start with a prompt and your conversation will appear
@@ -158,23 +158,41 @@ export default function ProjectWorkspacePage() {
                         </div>
                       )}
 
-                      {prompts.map((prompt) => (
-                        <div
-                          key={prompt.id}
-                          className={`flex ${
-                            prompt.type === "USER"
-                              ? "justify-end"
-                              : "justify-start"
-                          }`}
-                        >
+                      {prompts?.map((prompt) => (
+                        <div key={prompt.id} className={`flex justify-end`}>
                           <div
-                            className={`w-fit max-w-80 rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-break-word shadow-sm ${
-                              prompt.type === "USER"
-                                ? "bg-slate-900 text-white"
-                                : "border border-slate-200 bg-white text-slate-800"
-                            }`}
+                            className={`w-fit max-w-80 rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-break-word shadow-sm  bg-slate-900 text-white `}
                           >
-                            {prompt.content}
+                            {prompt.type === "USER" ? prompt.content : null}
+                          </div>
+                        </div>
+                      ))}
+
+                      {actions?.map((action) => (
+                        <div key={action.id} className={`flex justify-start`}>
+                          <div
+                            className={`w-fit max-w-80 rounded-2xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap wrap-break-word shadow-sm  bg-slate-200 text-slate-900 `}
+                          >
+                            {action.type === "FILE" ? (
+                              <div className="flex flex-col gap-1.5">
+                                <span className="font-semibold text-slate-700">
+                                  File updated:
+                                </span>
+                                <pre className="max-h-60 overflow-y-auto whitespace-pre-wrap break-all rounded bg-slate-100 p-2 text-[11px] leading-normal font-mono">
+                                  {action.content}
+                                </pre>
+                              </div>
+                            ) : null}
+                            {action.type === "SHELL" ? (
+                              <div className="flex flex-col gap-1">
+                                <span className="font-semibold text-slate-700">
+                                  Command:
+                                </span>
+                                <code className="break-all rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono">
+                                  {action.content}
+                                </code>
+                              </div>
+                            ) : null}
                           </div>
                         </div>
                       ))}
@@ -183,7 +201,7 @@ export default function ProjectWorkspacePage() {
 
                   <form
                     onSubmit={handleChatSubmit}
-                    className="border-t border-slate-200 p-3"
+                    className="shrink-0 border-t border-slate-200 p-2"
                   >
                     <label htmlFor="chat-input" className="sr-only">
                       Send a message
@@ -194,12 +212,12 @@ export default function ProjectWorkspacePage() {
                         type="text"
                         value={prompt}
                         onChange={(event) => setPrompt(event.target.value)}
-                        placeholder="Type a prompt for this project..."
-                        className="h-11 w-full rounded-xl border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-300/40"
+                        placeholder="Type a prompt..."
+                        className="h-9 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm outline-none transition focus:border-slate-500 focus:ring-4 focus:ring-slate-300/40"
                       />
                       <button
                         type="submit"
-                        className="h-11 rounded-xl bg-slate-900 px-4 text-sm font-semibold text-white transition hover:bg-slate-700"
+                        className="h-9 rounded-lg bg-slate-900 px-3 text-xs font-semibold text-white transition hover:bg-slate-700"
                       >
                         Send
                       </button>
@@ -207,16 +225,16 @@ export default function ProjectWorkspacePage() {
                   </form>
                 </section>
 
-                <section className="flex min-h-110 flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:min-h-0">
-                  <div className="border-b border-slate-200 px-4 py-3">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                <section className="flex flex-col min-h-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+                  <div className="shrink-0 border-b border-slate-200 px-3 py-2">
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                       Live Preview
                     </p>
-                    <p className="mt-1 text-sm text-slate-700">
+                    <p className="mt-0.5 text-xs text-slate-700 truncate">
                       http://localhost:8080
                     </p>
                   </div>
-                  <div className="flex-1 bg-slate-100/70 xl:min-h-0">
+                  <div className="flex-1 bg-slate-100/50">
                     <iframe
                       src="http://localhost:8080"
                       title="App preview"
